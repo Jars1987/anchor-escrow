@@ -2,7 +2,7 @@ use anchor_lang::prelude::*;
 use anchor_spl::associated_token::AssociatedToken;
 use anchor_spl::token_interface::{Mint, TokenAccount, TokenInterface, TransferChecked, transfer_checked};
 use crate::state::{Escrow};
-use crate::{constants::*, escrow};
+
 
 
 #[derive(Accounts)]
@@ -47,41 +47,33 @@ pub system_program: Program<'info, System>,
 }
 
 
-
-
-pub fn init_escrow(ctx: Context<MakeOffer>, seed: u64, receive: u64) -> Result<()> {
-    ctx.accounts.escrow.set_inner(Escrow {
+impl<'info> MakeOffer<'info> {
+  pub fn init_escrow(&mut self, seed: u64, receive: u64, bumps: MakeOfferBumps) -> Result<()> {
+    self.escrow.set_inner(Escrow {
         seed,
-        maker: ctx.accounts.maker.key(),
-        token_mint_a: ctx.accounts.token_mint_a.key(),
-        token_mint_b: ctx.accounts.token_mint_b.key(),
+        maker: self.maker.key(),
+        token_mint_a: self.token_mint_a.key(),
+        token_mint_b: self.token_mint_b.key(),
         receive_amount: receive,
-        bump: ctx.bumps.escrow,
+        bump: bumps.escrow,
     });
     Ok(())
 }
 
-//here we wont use the escrow state info because we need to make the transfer first
-//thats why we use the deposit argument, otherwise we could have used the escrow state info
-
-pub fn deposit(ctx: &Context<MakeOffer>, deposit: u64) -> Result<()> {
-    let maker = &ctx.accounts.maker;
-    let vault = &ctx.accounts.vault;
-    let maker_token_account_a = &ctx.accounts.maker_token_account_a;
-    let token_program = &ctx.accounts.token_program;
-    let mint = &ctx.accounts.token_mint_a;
+pub fn deposit(&mut self, deposit: u64) -> Result<()> {
 
 
-    // Transfer tokens from maker to escrow
-    let cpi_accounts = TransferChecked {
-        from: maker_token_account_a.to_account_info(),
-        to: vault.to_account_info(),
-        authority: maker.to_account_info(),
-        mint: mint.to_account_info(),
-    };
-    let cpi_program = token_program.to_account_info();
-    let cpi_ctx = CpiContext::new(cpi_program, cpi_accounts);
-    transfer_checked(cpi_ctx, deposit, mint.decimals)?;
+  // Transfer tokens from maker to escrow
+  let cpi_accounts = TransferChecked {
+      from: self.maker_token_account_a.to_account_info(),
+      to: self.vault.to_account_info(),
+      authority: self.maker.to_account_info(),
+      mint: self.token_mint_a.to_account_info(),
+  };
+  let cpi_program = self.token_program.to_account_info();
+  let cpi_ctx = CpiContext::new(cpi_program, cpi_accounts);
+  transfer_checked(cpi_ctx, deposit, self.token_mint_a.decimals)?;
 
-    Ok(())
+  Ok(())
+}
 }
