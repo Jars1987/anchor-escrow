@@ -11,6 +11,9 @@ pub struct TakeOffer<'info> {
 #[account(mut)]
 pub taker: Signer<'info>,
 
+#[account(
+  address = escrow.maker,
+)]
 pub maker: SystemAccount<'info>,
 
 #[account(
@@ -47,7 +50,9 @@ pub maker_token_account_b: InterfaceAccount<'info, TokenAccount>,
 
 #[account(
 mut, 
-seeds = [b"escrow", maker.key().as_ref(), escrow.seed.to_le_bytes().as_ref()],  
+has_one= token_mint_a,
+has_one= token_mint_b,
+seeds = [b"escrow", escrow.maker.as_ref(), escrow.seed.to_le_bytes().as_ref()],  
 bump = escrow.bump, 
 close = taker)]
 pub escrow: Account<'info, Escrow>,
@@ -77,7 +82,7 @@ pub fn send_wanted_tokens_to_maker(&mut self) -> Result<()> {
     };
     let cpi_program = self.token_program.to_account_info();
     let cpi_ctx = CpiContext::new(cpi_program, cpi_accounts);
-    transfer_checked(cpi_ctx, self.escrow.receive_amount , self.token_mint_b.decimals);
+    transfer_checked(cpi_ctx, self.escrow.receive_amount , self.token_mint_b.decimals)?;
     Ok(())
 
 }
@@ -107,7 +112,7 @@ let signer_seeds = [&seeds[..]];
 let cpi_program = self.token_program.to_account_info();
 let cpi_context = CpiContext::new_with_signer(cpi_program, cpi_accounts, &signer_seeds);
 
-transfer_checked(cpi_context, self.escrow.receive_amount, self.token_mint_a.decimals)?;
+transfer_checked(cpi_context, self.vault.amount, self.token_mint_a.decimals)?;
 
 
 let accounts = CloseAccount {
