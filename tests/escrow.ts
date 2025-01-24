@@ -172,13 +172,44 @@ describe('escrow', () => {
     )[0];
 
     try {
+      const makeIx = await program.methods
+        .make(seed, amount, deposit)
+        .accounts({
+          maker: maker.publicKey,
+          tokenMintA: tokenMintAkey,
+          tokenMintB: tokenMintBkey,
+          tokenProgram: TOKEN_PROGRAM,
+        })
+        .instruction();
+
+      const blockhashContext = await connection.getLatestBlockhash();
+
+      const tx = new anchor.web3.Transaction({
+        feePayer: alice.publicKey,
+        blockhash: blockhashContext.blockhash,
+        lastValidBlockHeight: blockhashContext.lastValidBlockHeight,
+      }).add(makeIx);
+
+      const signature = await anchor.web3.sendAndConfirmTransaction(
+        connection,
+        tx,
+        [alice]
+      );
+
+      console.log(`Signature: ${signature}`);
+
+      /*
+
+      //different way to send the transaction
+
+
       const transactionSignature = await program.methods
         .make(seed, amount, deposit)
         .accounts({
           maker: maker.publicKey,
           tokenMintA: tokenMintAkey,
           tokenMintB: tokenMintBkey,
-          makerTokenAccountA: makerTokenAccountA, //Error with the assoicated token account
+          makerTokenAccountA: makerTokenAccountA.publicKey, //Error with the assoicated token account
           escrow,
           vault,
           tokenProgram: TOKEN_PROGRAM,
@@ -189,6 +220,7 @@ describe('escrow', () => {
         .rpc();
 
       await confirmTransaction(connection, transactionSignature);
+      */
 
       // Check our vault contains the tokens offered
       const vaultBalanceResponse = await connection.getTokenAccountBalance(
