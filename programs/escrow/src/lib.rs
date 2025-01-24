@@ -8,7 +8,7 @@ pub use instructions::*;
 
 
 
-declare_id!("7K4y28DMQaREFEHy8yCGEjzFNSVTynpk8erXN5ivowGw");
+declare_id!("D1WxxPdrGKZym4rBRHz6A18JPqPVRUeHKnvBbj1b7oac");
 
 #[program]
 pub mod escrow {

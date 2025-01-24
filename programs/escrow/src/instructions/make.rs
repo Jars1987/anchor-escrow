@@ -4,7 +4,6 @@ use anchor_spl::token_interface::{Mint, TokenAccount, TokenInterface, TransferCh
 use crate::state::{Escrow};
 
 
-
 #[derive(Accounts)]
 #[instruction(seed: u64)]
 pub struct MakeOffer<'info> {
@@ -12,7 +11,9 @@ pub struct MakeOffer<'info> {
 #[account(mut)]
 pub maker: Signer<'info>,
 
+#[account(mint::token_program = token_program)]
 pub token_mint_a: InterfaceAccount<'info, Mint>,
+#[account(mint::token_program = token_program)]
 pub token_mint_b: InterfaceAccount<'info, Mint>,    
 
 #[account(
@@ -47,6 +48,7 @@ pub system_program: Program<'info, System>,
 }
 
 
+
 impl<'info> MakeOffer<'info> {
   pub fn init_escrow(&mut self, seed: u64, receive: u64, bumps: MakeOfferBumps) -> Result<()> {
     self.escrow.set_inner(Escrow {
@@ -57,6 +59,15 @@ impl<'info> MakeOffer<'info> {
         receive_amount: receive,
         bump: bumps.escrow,
     });
+
+    msg!("Escrow account created");
+    msg!("Escrow account: {:?}", self.escrow.key());
+    msg!("token_mint_a: {:?}", self.token_mint_a.key());
+    msg!("token_mint_b: {:?}", self.token_mint_b.key());
+    msg!("maker_token_account_a: {:?}", self.maker_token_account_a.key());
+    msg!("vault: {:?}", self.vault.key());
+    msg!("-----------------------------------------------------------------");
+
     Ok(())
 }
 
@@ -77,3 +88,4 @@ pub fn deposit(&mut self, deposit: u64) -> Result<()> {
   Ok(())
 }
 }
+
