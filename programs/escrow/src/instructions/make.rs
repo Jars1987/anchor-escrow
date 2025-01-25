@@ -18,7 +18,6 @@ pub token_mint_b: InterfaceAccount<'info, Mint>,
   mut,
   associated_token::mint = token_mint_a,
   associated_token::authority = maker,
- // associated_token::token_program = token_program,   //not needed because anchor under the hood knows how to get the token program
 )]
 pub maker_token_account_a: InterfaceAccount<'info, TokenAccount>,
 
@@ -35,8 +34,7 @@ pub escrow: Account<'info, Escrow>,
   init,
   payer = maker,
   associated_token::mint = token_mint_a,
-  associated_token::authority = escrow,  
-  // associated_token::token_program = token_program,   //not needed because anchor under the hood knows how to get the token program
+  associated_token::authority = escrow,   
 )]
 pub vault: InterfaceAccount<'info, TokenAccount>, //could name it escrow_token_account
 

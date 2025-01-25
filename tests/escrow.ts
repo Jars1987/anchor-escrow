@@ -4,12 +4,13 @@ import { Escrow } from '../target/types/escrow';
 import { LAMPORTS_PER_SOL, Keypair, PublicKey } from '@solana/web3.js';
 import {
   TOKEN_2022_PROGRAM_ID,
-  type TOKEN_PROGRAM_ID,
   ASSOCIATED_TOKEN_PROGRAM_ID,
   getAssociatedTokenAddressSync,
   createAssociatedTokenAccount,
   mintToChecked,
   createMint,
+  TOKEN_PROGRAM_ID,
+  getOrCreateAssociatedTokenAccount,
 } from '@solana/spl-token';
 import {
   confirmTransaction,
@@ -18,6 +19,7 @@ import {
 } from '@solana-developers/helpers';
 import { randomBytes } from 'node:crypto';
 import { assert } from 'chai';
+import { SYSTEM_PROGRAM_ID } from '@coral-xyz/anchor/dist/cjs/native/system';
 
 const programId = new PublicKey('D1WxxPdrGKZym4rBRHz6A18JPqPVRUeHKnvBbj1b7oac');
 const TOKEN_PROGRAM: typeof TOKEN_2022_PROGRAM_ID | typeof TOKEN_PROGRAM_ID =
@@ -32,90 +34,87 @@ describe('escrow', () => {
 
   const program = anchor.workspace.Escrow as Program<Escrow>;
 
-  let alice: anchor.web3.Keypair;
-  let bob: anchor.web3.Keypair;
+  let alice = anchor.web3.Keypair.generate();
+  let bob = anchor.web3.Keypair.generate();
 
-  [alice, bob] = makeKeypairs(4);
+  console.log('Alice Key', alice.publicKey.toBase58());
+  console.log('Bob Key', bob.publicKey.toBase58());
 
   let maker;
   let taker;
   let tokenMintAkey;
   let makerTokenAccountA;
-  let takerTokenAccountA;
   let tokenMintBkey;
-  let makerTokenAccountB;
   let takerTokenAccountB;
+  let escrow;
+  let vault;
+
+  // Pick a random seed for the offer we'll make
+  const seed = new BN(randomBytes(8));
+
+  let amount = new BN(1_000_000);
+  let deposit = new BN(500_000);
 
   before(
     'Creates Alice and Bob accounts, 2 token mints, and associated token accounts for both tokens for both users',
     async () => {
       //airdrop some SOL to both alice and bob
-      await provider.connection.requestAirdrop(
+      let tx1 = await provider.connection.requestAirdrop(
         alice.publicKey,
         2 * LAMPORTS_PER_SOL
       );
-      await provider.connection.requestAirdrop(
+
+      await confirmTransaction(connection, tx1, 'confirmed');
+
+      let tx2 = await provider.connection.requestAirdrop(
         bob.publicKey,
         2 * LAMPORTS_PER_SOL
       );
 
+      await confirmTransaction(connection, tx2, 'confirmed');
+
       //create token mints
       let mintPubkeyA = await createMint(
         connection, // connection
-        signer.payer, // fee payer
+        alice, // fee payer
         alice.publicKey, // mint authority
         alice.publicKey, // freeze authority (you can use `null` to disable it. when you disable it, you can't turn it on again)
         6 // decimals
       );
-      console.log(`mint: ${mintPubkeyA.toBase58()}`);
+      console.log(`mint A: ${mintPubkeyA.toBase58()}`);
 
       let mintPubkeyB = await createMint(
         connection, // connection
-        signer.payer, // fee payer
+        alice, // fee payer
         alice.publicKey, // mint authority
         alice.publicKey, // freeze authority (you can use `null` to disable it. when you disable it, you can't turn it on again)
         6 // decimals
       );
+      console.log(`mint B: ${mintPubkeyB.toBase58()}`);
 
       // create associated token accounts for both alice and bob
-      let makerATAA = await createAssociatedTokenAccount(
+      let makerATAA = await getOrCreateAssociatedTokenAccount(
         connection, // connection
-        signer.payer, // fee payer
+        alice, // fee payer
         mintPubkeyA, // mint
         alice.publicKey // owner,
       );
-      console.log(`maker ATAA: ${makerATAA.toBase58()}`);
+      console.log(`maker ATAA: ${makerATAA.address.toBase58()}`);
 
-      let makerATAB = await createAssociatedTokenAccount(
+      let takerATAB = await getOrCreateAssociatedTokenAccount(
         connection, // connection
-        signer.payer, // fee payer
-        mintPubkeyB, // mint
-        alice.publicKey // owner,
-      );
-      console.log(`maker ATAB: ${makerATAB.toBase58()}`);
-
-      let takerATAA = await createAssociatedTokenAccount(
-        connection, // connection
-        signer.payer, // fee payer
-        mintPubkeyA, // mint
-        bob.publicKey // owner,
-      );
-      console.log(`taker ATAA: ${takerATAA.toBase58()}`);
-
-      let takerATAB = await createAssociatedTokenAccount(
-        connection, // connection
-        signer.payer, // fee payer
+        alice, // fee payer
         mintPubkeyB, // mint
         bob.publicKey // owner,
       );
-      console.log(`taker ATAB: ${takerATAB.toBase58()}`);
+      console.log(`taker ATAB: ${takerATAB.address.toBase58()}`);
 
       // mint tokens to both alice and bob
       let txhash = await mintToChecked(
         connection, // connection
-        signer.payer, // fee payer
+        alice, // fee payer
         mintPubkeyA, // mint
-        makerATAA, // receiver (should be a token account)
+        makerATAA.address, // receiver (should be a token account)
         alice, // mint authority
         10000 * 10 ** 6, // amount. if your decimals is 8, you mint 10^8 for 1 token.
         6 // decimals
@@ -126,59 +125,52 @@ describe('escrow', () => {
         connection, // connection
         signer.payer, // fee payer
         mintPubkeyB, // mint
-        takerATAB, // receiver (should be a token account)
+        takerATAB.address, // receiver (should be a token account)
         alice, // mint authority
         10000 * 10 ** 6, // amount. if your decimals is 8, you mint 10^8 for 1 token.
         6 // decimals
       );
       console.log(`txhash: ${txhash2}`);
 
+      // Then determine the account addresses we'll use for the escrow and the vault
+      escrow = PublicKey.findProgramAddressSync(
+        [
+          Buffer.from('escrow'),
+          alice.publicKey.toBuffer(),
+          seed.toArrayLike(Buffer, 'le', 8),
+        ],
+        program.programId
+      )[0];
+
+      vault = PublicKey.findProgramAddressSync(
+        [
+          Buffer.from('vault'),
+          escrow.toBuffer(),
+          seed.toArrayLike(Buffer, 'le', 8),
+        ],
+        program.programId
+      )[0];
+
       //set variables to be used in the tests
       maker = alice;
       taker = bob;
       tokenMintAkey = mintPubkeyA;
       tokenMintBkey = mintPubkeyB;
-      makerTokenAccountA = makerATAA;
-      makerTokenAccountB = makerATAB;
-      takerTokenAccountA = takerATAA;
-      takerTokenAccountB = takerATAB;
+      makerTokenAccountA = makerATAA.address;
+      takerTokenAccountB = takerATAB.address;
     }
   );
 
   it('Alice makes an offer for token B and deposits token A', async () => {
-    // Pick a random seed for the offer we'll make
-    const seed = new BN(randomBytes(8));
-
-    let amount = new BN(1_000_000);
-    let deposit = new BN(500_000);
-
-    // Then determine the account addresses we'll use for the escrow and the vault
-    const escrow = PublicKey.findProgramAddressSync(
-      [
-        Buffer.from('escrow'),
-        maker.publicKey.toBuffer(),
-        seed.toArrayLike(Buffer, 'le', 8),
-      ],
-      program.programId
-    )[0];
-
-    const vault = PublicKey.findProgramAddressSync(
-      [
-        Buffer.from('vault'),
-        escrow.toBuffer(),
-        seed.toArrayLike(Buffer, 'le', 8),
-      ],
-      program.programId
-    )[0];
-
     try {
+      /*
       const makeIx = await program.methods
         .make(seed, amount, deposit)
         .accounts({
-          maker: maker.publicKey,
+          maker,
           tokenMintA: tokenMintAkey,
           tokenMintB: tokenMintBkey,
-          tokenProgram: TOKEN_PROGRAM,
+          tokenProgram: TOKEN_PROGRAM_ID,
         })
         .instruction();
 
@@ -193,15 +185,25 @@ describe('escrow', () => {
       const signature = await anchor.web3.sendAndConfirmTransaction(
         connection,
         tx,
-        [alice]
+        [maker]
       );
 
       console.log(`Signature: ${signature}`);
-
-      /*
+  */
 
       //different way to send the transaction
 
+      let accounts = {
+        maker: maker.publicKey,
+        tokenMintA: tokenMintAkey,
+        tokenMintB: tokenMintBkey,
+        makerTokenAccountA, //Error with the assoicated token account
+        escrow,
+        vault,
+        tokenProgram: TOKEN_PROGRAM_ID,
+        associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+        systemProgram: anchor.web3.SystemProgram.programId,
+      };
 
       const transactionSignature = await program.methods
         .make(seed, amount, deposit)
@@ -209,18 +211,12 @@ describe('escrow', () => {
           maker: maker.publicKey,
           tokenMintA: tokenMintAkey,
           tokenMintB: tokenMintBkey,
-          makerTokenAccountA: makerTokenAccountA.publicKey, //Error with the assoicated token account
-          escrow,
-          vault,
-          tokenProgram: TOKEN_PROGRAM,
-          associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
-          systemProgram: anchor.web3.SystemProgram.programId,
+          tokenProgram: TOKEN_PROGRAM_ID,
         })
         .signers([maker])
         .rpc();
 
       await confirmTransaction(connection, transactionSignature);
-      */
 
       // Check our vault contains the tokens offered
       const vaultBalanceResponse = await connection.getTokenAccountBalance(
@@ -232,7 +228,7 @@ describe('escrow', () => {
       // Check our Offer account contains the correct data
       const offerAccount = await program.account.escrow.fetch(escrow);
 
-      assert(offerAccount.maker.equals(alice.publicKey));
+      assert(offerAccount.maker.equals(maker.publicKey));
       assert(offerAccount.tokenMintA.equals(tokenMintAkey));
       assert(offerAccount.tokenMintB.equals(tokenMintBkey));
       assert(offerAccount.receiveAmount.eq(amount));
