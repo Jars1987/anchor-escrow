@@ -11,6 +11,7 @@ import {
   createMint,
   TOKEN_PROGRAM_ID,
   getOrCreateAssociatedTokenAccount,
+  mintTo,
 } from '@solana/spl-token';
 import {
   confirmTransaction,
@@ -34,6 +35,12 @@ describe('escrow', () => {
 
   const program = anchor.workspace.Escrow as Program<Escrow>;
 
+  // Pick a random seed for the offer we'll make
+  const seed = new BN(randomBytes(8));
+
+  let amount = new BN(1_000_000);
+  let deposit = new BN(500_000);
+
   let alice = anchor.web3.Keypair.generate();
   let bob = anchor.web3.Keypair.generate();
 
@@ -46,14 +53,18 @@ describe('escrow', () => {
   let makerTokenAccountA;
   let tokenMintBkey;
   let takerTokenAccountB;
-  let escrow;
+
+  let // Then determine the account addresses we'll use for the escrow and the vault
+    escrow = PublicKey.findProgramAddressSync(
+      [
+        Buffer.from('escrow'),
+        alice.publicKey.toBuffer(),
+        seed.toArrayLike(Buffer, 'le', 8),
+      ],
+      programId
+    )[0];
+
   let vault;
-
-  // Pick a random seed for the offer we'll make
-  const seed = new BN(randomBytes(8));
-
-  let amount = new BN(1_000_000);
-  let deposit = new BN(500_000);
 
   before(
     'Creates Alice and Bob accounts, 2 token mints, and associated token accounts for both tokens for both users',
@@ -78,19 +89,19 @@ describe('escrow', () => {
         connection, // connection
         alice, // fee payer
         alice.publicKey, // mint authority
-        alice.publicKey, // freeze authority (you can use `null` to disable it. when you disable it, you can't turn it on again)
+        null, // freeze authority (you can use `null` to disable it. when you disable it, you can't turn it on again)
         6 // decimals
       );
-      console.log(`mint A: ${mintPubkeyA.toBase58()}`);
+      console.log(`mint A: ${mintPubkeyA}`);
 
       let mintPubkeyB = await createMint(
         connection, // connection
         alice, // fee payer
         alice.publicKey, // mint authority
-        alice.publicKey, // freeze authority (you can use `null` to disable it. when you disable it, you can't turn it on again)
+        null, // freeze authority (you can use `null` to disable it. when you disable it, you can't turn it on again)
         6 // decimals
       );
-      console.log(`mint B: ${mintPubkeyB.toBase58()}`);
+      console.log(`mint B: ${mintPubkeyB}`);
 
       // create associated token accounts for both alice and bob
       let makerATAA = await getOrCreateAssociatedTokenAccount(
@@ -99,7 +110,7 @@ describe('escrow', () => {
         mintPubkeyA, // mint
         alice.publicKey // owner,
       );
-      console.log(`maker ATAA: ${makerATAA.address.toBase58()}`);
+      console.log(`maker ATAA: ${makerATAA.address}`);
 
       let takerATAB = await getOrCreateAssociatedTokenAccount(
         connection, // connection
@@ -107,49 +118,28 @@ describe('escrow', () => {
         mintPubkeyB, // mint
         bob.publicKey // owner,
       );
-      console.log(`taker ATAB: ${takerATAB.address.toBase58()}`);
+      console.log(`taker ATAB: ${takerATAB.address}`);
 
       // mint tokens to both alice and bob
-      let txhash = await mintToChecked(
+      await mintTo(
         connection, // connection
         alice, // fee payer
         mintPubkeyA, // mint
         makerATAA.address, // receiver (should be a token account)
         alice, // mint authority
-        10000 * 10 ** 6, // amount. if your decimals is 8, you mint 10^8 for 1 token.
-        6 // decimals
+        10000 * 10 ** 6 // amount. if your decimals is 8, you mint 10^8 for 1 token.
       );
-      console.log(`txhash: ${txhash}`);
+      console.log(`Maker ATA: `, makerATAA.amount.valueOf());
 
-      let txhash2 = await mintToChecked(
+      await mintTo(
         connection, // connection
-        signer.payer, // fee payer
+        bob, // fee payer
         mintPubkeyB, // mint
         takerATAB.address, // receiver (should be a token account)
         alice, // mint authority
-        10000 * 10 ** 6, // amount. if your decimals is 8, you mint 10^8 for 1 token.
-        6 // decimals
+        10000 * 10 ** 6 // amount. if your decimals is 8, you mint 10^8 for 1 token.
       );
-      console.log(`txhash: ${txhash2}`);
-
-      // Then determine the account addresses we'll use for the escrow and the vault
-      escrow = PublicKey.findProgramAddressSync(
-        [
-          Buffer.from('escrow'),
-          alice.publicKey.toBuffer(),
-          seed.toArrayLike(Buffer, 'le', 8),
-        ],
-        program.programId
-      )[0];
-
-      vault = PublicKey.findProgramAddressSync(
-        [
-          Buffer.from('vault'),
-          escrow.toBuffer(),
-          seed.toArrayLike(Buffer, 'le', 8),
-        ],
-        program.programId
-      )[0];
+      console.log(`taker ATA: `, takerATAB.amount.valueOf());
 
       //set variables to be used in the tests
       maker = alice;
@@ -162,6 +152,13 @@ describe('escrow', () => {
   );
 
   it('Alice makes an offer for token B and deposits token A', async () => {
+    vault = getAssociatedTokenAddressSync(
+      tokenMintAkey,
+      escrow,
+      true,
+      TOKEN_PROGRAM_ID
+    );
+
     try {
       /*
       const makeIx = await program.methods
