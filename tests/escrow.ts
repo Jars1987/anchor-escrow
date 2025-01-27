@@ -154,13 +154,13 @@ describe('Testing escrow program:', () => {
     );
 
     try {
-      /*
       const makeIx = await program.methods
         .make(seed, amount, deposit)
-        .accounts({
-          maker,
+        .accountsPartial({
+          maker: maker.publicKey,
           tokenMintA: tokenMintAkey,
           tokenMintB: tokenMintBkey,
+          makerTokenAccountA,
           tokenProgram: TOKEN_PROGRAM_ID,
         })
         .instruction();
@@ -168,7 +168,7 @@ describe('Testing escrow program:', () => {
       const blockhashContext = await connection.getLatestBlockhash();
 
       const tx = new anchor.web3.Transaction({
-        feePayer: alice.publicKey,
+        feePayer: maker.publicKey,
         blockhash: blockhashContext.blockhash,
         lastValidBlockHeight: blockhashContext.lastValidBlockHeight,
       }).add(makeIx);
@@ -180,8 +180,8 @@ describe('Testing escrow program:', () => {
       );
 
       console.log(`Signature: ${signature}`);
-   */
 
+      /*
       //different way to send the transaction
 
       let accounts = {
@@ -198,11 +198,12 @@ describe('Testing escrow program:', () => {
 
       const transactionSignature = await program.methods
         .make(seed, amount, deposit)
-        .accounts(accounts)
+        .accountsPartial(accounts)
         .signers([maker])
         .rpc();
 
       await confirmTransaction(connection, transactionSignature);
+         */
 
       // Check our vault contains the tokens offered
       const vaultBalanceResponse = await connection.getTokenAccountBalance(
