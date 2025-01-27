@@ -28,7 +28,7 @@ pub maker_token_account_a: InterfaceAccount<'info, TokenAccount>,
   seeds = [b"escrow", maker.key().as_ref(), seed.to_le_bytes().as_ref()],  
   bump
 )]
-pub escrow: Account<'info, Escrow>,
+pub escrow: Box<Account<'info, Escrow>>,
 
 #[account(
   init,
@@ -36,7 +36,7 @@ pub escrow: Account<'info, Escrow>,
   associated_token::mint = token_mint_a,
   associated_token::authority = escrow,   
 )]
-pub vault: InterfaceAccount<'info, TokenAccount>, //could name it escrow_token_account
+pub vault: Box<InterfaceAccount<'info, TokenAccount>>, //could name it escrow_token_account
 
 pub token_program: Interface<'info, TokenInterface>,
 pub associated_token_program: Program<'info, AssociatedToken>,

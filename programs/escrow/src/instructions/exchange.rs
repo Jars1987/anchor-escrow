@@ -31,14 +31,14 @@ pub token_mint_b: InterfaceAccount<'info, Mint>,
     associated_token::mint = token_mint_a,
     associated_token::authority = taker,
 )]
-pub taker_token_account_a: InterfaceAccount<'info, TokenAccount>,
+pub taker_token_account_a: Box<InterfaceAccount<'info, TokenAccount>>,
 
 #[account(
     mut,
     associated_token::mint = token_mint_b,
     associated_token::authority = taker,
 )]
-pub taker_token_account_b: InterfaceAccount<'info, TokenAccount>,
+pub taker_token_account_b: Box<InterfaceAccount<'info, TokenAccount>>,
 
 #[account(
   init_if_needed,
@@ -46,7 +46,7 @@ pub taker_token_account_b: InterfaceAccount<'info, TokenAccount>,
   associated_token::mint = token_mint_b,
   associated_token::authority = maker,  
 )]
-pub maker_token_account_b: InterfaceAccount<'info, TokenAccount>,
+pub maker_token_account_b: Box<InterfaceAccount<'info, TokenAccount>>,
 
 #[account(
 mut, 
@@ -55,14 +55,14 @@ has_one= token_mint_b,
 seeds = [b"escrow", escrow.maker.as_ref(), escrow.seed.to_le_bytes().as_ref()],  
 bump = escrow.bump, 
 close = taker)]
-pub escrow: Account<'info, Escrow>,
+pub escrow: Box<Account<'info, Escrow>>,
 
 #[account(
   mut, 
   associated_token::mint = token_mint_a,
   associated_token::authority = escrow,  
 )]
-  pub vault: InterfaceAccount<'info, TokenAccount>, //could name it escrow_ATA
+  pub vault: Box<InterfaceAccount<'info, TokenAccount>>, //could name it escrow_ATA
 
 pub token_program: Interface<'info, TokenInterface>,
 pub associated_token_program: Program<'info, AssociatedToken>,

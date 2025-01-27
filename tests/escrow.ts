@@ -12,6 +12,7 @@ import {
   TOKEN_PROGRAM_ID,
   getOrCreateAssociatedTokenAccount,
   mintTo,
+  getAccount,
 } from '@solana/spl-token';
 import {
   confirmTransaction,
@@ -26,7 +27,7 @@ const programId = new PublicKey('D1WxxPdrGKZym4rBRHz6A18JPqPVRUeHKnvBbj1b7oac');
 const TOKEN_PROGRAM: typeof TOKEN_2022_PROGRAM_ID | typeof TOKEN_PROGRAM_ID =
   TOKEN_2022_PROGRAM_ID;
 
-describe('escrow', () => {
+describe('Testing escrow program:', () => {
   // Configure the client to use the local cluster.
   const provider = anchor.AnchorProvider.env();
   anchor.setProvider(provider);
@@ -43,9 +44,6 @@ describe('escrow', () => {
 
   let alice = anchor.web3.Keypair.generate();
   let bob = anchor.web3.Keypair.generate();
-
-  console.log('Alice Key', alice.publicKey.toBase58());
-  console.log('Bob Key', bob.publicKey.toBase58());
 
   let maker;
   let taker;
@@ -92,7 +90,6 @@ describe('escrow', () => {
         null, // freeze authority (you can use `null` to disable it. when you disable it, you can't turn it on again)
         6 // decimals
       );
-      console.log(`mint A: ${mintPubkeyA}`);
 
       let mintPubkeyB = await createMint(
         connection, // connection
@@ -101,7 +98,6 @@ describe('escrow', () => {
         null, // freeze authority (you can use `null` to disable it. when you disable it, you can't turn it on again)
         6 // decimals
       );
-      console.log(`mint B: ${mintPubkeyB}`);
 
       // create associated token accounts for both alice and bob
       let makerATAA = await getOrCreateAssociatedTokenAccount(
@@ -118,7 +114,6 @@ describe('escrow', () => {
         mintPubkeyB, // mint
         bob.publicKey // owner,
       );
-      console.log(`taker ATAB: ${takerATAB.address}`);
 
       // mint tokens to both alice and bob
       await mintTo(
@@ -129,7 +124,6 @@ describe('escrow', () => {
         alice, // mint authority
         10000 * 10 ** 6 // amount. if your decimals is 8, you mint 10^8 for 1 token.
       );
-      console.log(`Maker ATA: `, makerATAA.amount.valueOf());
 
       await mintTo(
         connection, // connection
@@ -186,7 +180,7 @@ describe('escrow', () => {
       );
 
       console.log(`Signature: ${signature}`);
-  */
+   */
 
       //different way to send the transaction
 
@@ -204,12 +198,7 @@ describe('escrow', () => {
 
       const transactionSignature = await program.methods
         .make(seed, amount, deposit)
-        .accounts({
-          maker: maker.publicKey,
-          tokenMintA: tokenMintAkey,
-          tokenMintB: tokenMintBkey,
-          tokenProgram: TOKEN_PROGRAM_ID,
-        })
+        .accounts(accounts)
         .signers([maker])
         .rpc();
 
@@ -232,6 +221,40 @@ describe('escrow', () => {
     } catch (error) {
       console.error('Transaction Error: ', error);
       assert(false);
+    }
+  });
+
+  it('Bob swap tokens with Alice', async () => {
+    try {
+      let tx = await program.methods
+        .exchange()
+        .accountsPartial({
+          taker: taker.publicKey,
+          maker: maker.publicKey,
+          tokenMintA: tokenMintAkey,
+          tokenMintB: tokenMintBkey,
+          tokenProgram: TOKEN_PROGRAM_ID,
+        })
+        .signers([taker])
+        .rpc();
+
+      let takerTokenAccountA = getAssociatedTokenAddressSync(
+        tokenMintAkey,
+        taker,
+        true,
+        TOKEN_PROGRAM_ID
+      );
+
+      const takerATABAccountInfo = await getAccount(
+        connection,
+        takerTokenAccountA
+      );
+      console.log(`Token Amount: ${takerATABAccountInfo.amount}`);
+
+      let spl_amount = new BN(takerATABAccountInfo.amount.toString());
+      assert(spl_amount.eq(deposit));
+    } catch (e) {
+      console.log(e);
     }
   });
 });
