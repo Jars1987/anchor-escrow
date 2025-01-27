@@ -234,6 +234,7 @@ describe('Testing escrow program:', () => {
           maker: maker.publicKey,
           tokenMintA: tokenMintAkey,
           tokenMintB: tokenMintBkey,
+          escrow,
           tokenProgram: TOKEN_PROGRAM_ID,
         })
         .signers([taker])
@@ -241,8 +242,8 @@ describe('Testing escrow program:', () => {
 
       let takerTokenAccountA = getAssociatedTokenAddressSync(
         tokenMintAkey,
-        taker,
-        true,
+        taker.publicKey,
+        false,
         TOKEN_PROGRAM_ID
       );
 
