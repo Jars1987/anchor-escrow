@@ -2,11 +2,10 @@ pub mod constants;
 pub mod error;
 pub mod instructions;
 pub mod state;
+mod tests;
 
 use anchor_lang::prelude::*;
 pub use instructions::*;
-
-
 
 declare_id!("D1WxxPdrGKZym4rBRHz6A18JPqPVRUeHKnvBbj1b7oac");
 
@@ -14,10 +13,10 @@ declare_id!("D1WxxPdrGKZym4rBRHz6A18JPqPVRUeHKnvBbj1b7oac");
 pub mod escrow {
     use super::*;
 
-    pub fn make(ctx: Context<MakeOffer>, seed:u64, receive: u64, deposit: u64) -> Result<()> {
+    pub fn make(ctx: Context<MakeOffer>, seed: u64, receive: u64, deposit: u64) -> Result<()> {
         ctx.accounts.init_escrow(seed, receive, ctx.bumps)?;
         ctx.accounts.deposit(deposit)?;
-       
+
         Ok(())
     }
 
@@ -32,5 +31,3 @@ pub mod escrow {
         Ok(())
     }
 }
-
-
