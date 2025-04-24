@@ -12,3 +12,7 @@ pub struct Escrow {
 }
 
 //we don't need the amount offered because we can get it from the vault: ctx.accounts.vault.amount
+
+impl Escrow {
+    pub const LEN: usize = core::mem::size_of::<Escrow>();
+}

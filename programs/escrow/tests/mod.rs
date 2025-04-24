@@ -1,29 +1,24 @@
+//solana config set --url https://api.mainnet-beta.solana.com
+//solana program show TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA
+
 #[cfg(test)]
 mod tests {
-
-    #![no_std]
-    extern crate alloc;
-
-    use alloc::vec;
-    use alloc::vec::Vec;
+    use anchor_lang::InstructionData;
+    use anchor_lang::Space;
+    use escrow::state::Escrow;
     use mollusk_svm::{program, result::Check, Mollusk};
-    use pinocchio_log::log;
     use solana_sdk::{
-        account::{Account, AccountSharedData, WritableAccount},
+        account::{Account, WritableAccount},
         instruction::{AccountMeta, Instruction},
         native_token::LAMPORTS_PER_SOL,
         program_option::COption,
         program_pack::Pack,
         pubkey,
         pubkey::Pubkey,
-        rent::Rent,
-        sysvar::Sysvar,
     };
     use spl_token::state::AccountState;
 
-    use crate::state::Escrow;
-
-    const ID: Pubkey = pubkey!("A24MN2mj3aBpDLRhY6FonnbTuayv7oRqhva2R2hUuyqx");
+    const ID: Pubkey = pubkey!("D1WxxPdrGKZym4rBRHz6A18JPqPVRUeHKnvBbj1b7oac");
     const SEED: u64 = 1;
     const RECEIVE_AMOUNT: u64 = 10_000;
     const DEPOSIT_AMOUNT: u64 = 5_000;
@@ -46,7 +41,7 @@ mod tests {
 
         mollusk.add_program(
             &spl_token::ID,
-            "src/tests/spl_token-3.5.0",
+            "src/tests/elf/spl_token.so",
             &mollusk_svm::program::loader_keys::LOADER_V3,
         );
 
@@ -57,7 +52,7 @@ mod tests {
 
         //get remanining pubkeys
         let (escrow, escrow_bump) = solana_sdk::pubkey::Pubkey::find_program_address(
-            &[(b"escrow"), &maker.to_bytes(), &SEED.to_le_bytes()],
+            &[(b"escrow"), &MAKER.to_bytes(), &SEED.to_le_bytes()],
             &ID,
         );
 
@@ -152,12 +147,7 @@ mod tests {
         )
         .unwrap();
 
-        let data = (vault::instruction::Deposit {
-            seed: SEED,
-            receive: RECEIVE_AMOUNT,
-            deposit: DEPOSIT_AMOUNT,
-        })
-        .data();
+        let data = escrow::instruction::make(SEED, RECEIVE_AMOUNT, DEPOSIT_AMOUNT).data();
 
         //Make vec of Account Metas
         let ix_accs = vec![
@@ -210,7 +200,7 @@ mod tests {
 
         //get pubkeys
         let (escrow, escrow_bump) = solana_sdk::pubkey::Pubkey::find_program_address(
-            &[(b"escrow"), &maker.to_bytes(), &SEED.to_le_bytes()],
+            &[(b"escrow"), &MAKER.to_bytes(), &SEED.to_le_bytes()],
             &ID,
         );
 
@@ -271,7 +261,7 @@ mod tests {
         let mut escrow_account = Account::new(
             mollusk.sysvars.rent.minimum_balance(8 + Escrow::INIT_SPACE),
             8 + Escrow::INIT_SPACE,
-            crate::ID,
+            &ID,
         );
 
         //Inject the data in to the accounts
@@ -302,7 +292,7 @@ mod tests {
         solana_sdk::program_pack::Pack::pack(
             spl_token::state::Account {
                 mint: MINT_Y,
-                owner: maker,
+                owner: MAKER,
                 amount: 0,
                 delegate: COption::None,
                 state: AccountState::Initialized,
@@ -317,7 +307,7 @@ mod tests {
         solana_sdk::program_pack::Pack::pack(
             spl_token::state::Account {
                 mint: MINT_Y,
-                owner: maker,
+                owner: TAKER,
                 amount: 0,
                 delegate: COption::None,
                 state: AccountState::Initialized,
@@ -332,7 +322,7 @@ mod tests {
         solana_sdk::program_pack::Pack::pack(
             spl_token::state::Account {
                 mint: MINT_Y,
-                owner: maker,
+                owner: TAKER,
                 amount: 10_000,
                 delegate: COption::None,
                 state: AccountState::Initialized,
@@ -368,10 +358,11 @@ mod tests {
             bump: escrow_bump,
         };
 
-        anchor_lang::AccountSerialize::try_serialize(&escrow_data, &escrow_account)
+        let escrow_writable_acc = escrow_account.data_as_mut_slice();
+        anchor_lang::AccountSerialize::try_serialize(&escrow_data, &mut escrow_writable_acc)
             .expect("Failed to serialize state account data");
 
-        let data = (vault::instruction::Exchange {}).data();
+        let data = escrow::instructions::exchange().data();
 
         //Make vec of Account Metas
         let ix_accs = vec![
@@ -393,11 +384,14 @@ mod tests {
 
         //Make Transaction Accs Vec
         let tx_accs = vec![
-            (maker, maker_account),
-            (mint_x, mint_x_account),
-            (mint_y, mint_y_account),
-            (maker_ata, maker_ata_account),
-            (vault, vault_account),
+            (TAKER, maker_account),
+            (MAKER, maker_account),
+            (MINT_X, mint_x_account),
+            (MINT_Y, mint_y_account),
+            (TAKER_X_ATA, taker_ata_x_account),
+            (TAKER_Y_ATA, taker_ata_y_account),
+            (MAKER_Y_ATA, maker_ata_y_account),
+            (VAULT, vault_account),
             (escrow, escrow_account),
             (system_program, system_account),
             (token_program, token_account),
