@@ -6,7 +6,7 @@ pub mod state;
 use anchor_lang::prelude::*;
 pub use instructions::*;
 
-declare_id!("D1WxxPdrGKZym4rBRHz6A18JPqPVRUeHKnvBbj1b7oac");
+declare_id!("53E3gL8jErkT5PahCinHP6nw3P8ZtxBidvvLvsxpqs91");
 
 #[program]
 pub mod escrow {

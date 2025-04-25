@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
 use anchor_spl::associated_token::AssociatedToken;
 use anchor_spl::token_interface::{Mint, TokenAccount, TokenInterface, TransferChecked, transfer_checked};
-use crate::state::{Escrow};
+use crate::state::Escrow;
 
 
 #[derive(Accounts)]
@@ -36,7 +36,7 @@ pub escrow: Box<Account<'info, Escrow>>,
   associated_token::mint = token_mint_a,
   associated_token::authority = escrow,   
 )]
-pub vault: Box<InterfaceAccount<'info, TokenAccount>>, //could name it escrow_token_account
+pub vault: Box<InterfaceAccount<'info, TokenAccount>>, 
 
 pub token_program: Interface<'info, TokenInterface>,
 pub associated_token_program: Program<'info, AssociatedToken>,

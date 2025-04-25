@@ -24,3 +24,5 @@ anchor-spl = "0.31.1"
 solana-sdk = "2.1.0"
 mollusk-svm = "0.1.4"
 spl-token = "8.0.0"
+spl-associated-token-account = "6.0.0"
+
